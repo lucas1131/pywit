@@ -21,9 +21,9 @@ class WitError(Exception):
     pass
 
 
-def req(logger, access_token, meth, path, params, **kwargs):
+def req(logger, access_token, meth, path, params, timeout=None, **kwargs):
     full_url = WIT_API_HOST + path
-    logger.debug('%s %s %s', meth, full_url, params)
+    # logger.debug('%s %s %s', meth, full_url, params)
     headers = {
         'authorization': 'Bearer ' + access_token,
         'accept': 'application/vnd.wit.' + WIT_API_VERSION + '+json'
@@ -34,6 +34,7 @@ def req(logger, access_token, meth, path, params, **kwargs):
         full_url,
         headers=headers,
         params=params,
+        timeout=timeout,
         **kwargs
     )
     if rsp.status_code > 200:
@@ -43,7 +44,7 @@ def req(logger, access_token, meth, path, params, **kwargs):
     if 'error' in json:
         raise WitError('Wit responded with an error: ' + json['error'])
 
-    logger.debug('%s %s %s', meth, full_url, json)
+    # logger.debug('%s %s %s', meth, full_url, json)
     return json
 
 
@@ -51,11 +52,13 @@ class Wit(object):
     access_token = None
     _sessions = {}
 
-    def __init__(self, access_token, logger=None):
+    def __init__(self, access_token, logger=None, timeout=None):
         self.access_token = access_token
         self.logger = logger or logging.getLogger(__name__)
+        self.user_timeout = timeout
 
-    def message(self, msg, context=None, n=None, verbose=None):
+    def message(self, msg, context=None, n=None, verbose=None, timeout=None):
+        
         params = {}
         if verbose:
             params['verbose'] = verbose
@@ -65,7 +68,23 @@ class Wit(object):
             params['q'] = msg
         if context:
             params['context'] = json.dumps(context)
-        resp = req(self.logger, self.access_token, 'GET', '/message', params)
+
+        if timeout:
+            req_timeout = timeout
+        elif self.user_timeout:
+            req_timeout = self.user_timeout
+        else:
+            req_timeout = None
+        
+        resp = req(
+            self.logger, 
+            self.access_token, 
+            'GET', 
+            '/message', 
+            params, 
+            req_timeout
+        )
+
         return resp
 
     def speech(self, audio_file, verbose=None, headers=None):
